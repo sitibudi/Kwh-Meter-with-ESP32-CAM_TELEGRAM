@@ -43,7 +43,7 @@ bool Jd2 = false;
 bool Jd3 = false;
 bool status_jd =false;
 
-//Checks for new messages every 1 second.
+//Checks for new messages every 100 millisecond.
 int botRequestDelay = 100;
 unsigned long lastTimeBotRan;
 
@@ -388,16 +388,16 @@ void loop() {
 //    Serial.println(jam2_jd2);
 //    Serial.println(jam1_jd3);
 //    Serial.println(jam2_jd3);    
-    
+    pre_time = current;
   }
-  pre_time = current;
+  
 
 // get new Messages from Telegram
   if (millis() > lastTimeBotRan + botRequestDelay ){//and Jd1 == false and Jd2 == false and Jd3 == false)  {
     if (Jd1 == false and Jd2 == false and Jd3 == false){
     int numNewMessages = bot.getUpdates(bot.last_message_received + 1);
-    Serial.print("bot");
-    Serial.println(bot.last_message_received);
+//    Serial.print("bot");
+//    Serial.println(bot.last_message_received);
     while (numNewMessages) {
       Serial.print("num:");
       Serial.println(numNewMessages);
@@ -409,7 +409,10 @@ void loop() {
 
     }
   }
-
+    int current1=millis();
+    int pre_time1;
+  if ( current1 - pre_time1 >50){
+    
   
   if (val == HIGH ) {
     digitalWrite(FLASH_LED_PIN, HIGH);
@@ -610,6 +613,7 @@ else if(Jd3){
     }
   }
 
-  
+  pre_time1 = current1;
+  }
 
 }
