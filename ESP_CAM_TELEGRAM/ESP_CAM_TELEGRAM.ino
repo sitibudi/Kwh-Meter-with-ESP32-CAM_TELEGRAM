@@ -87,12 +87,44 @@ int jam2_jd2;  // variabel untuk jam 2 di jadwal 2
 int jam1_jd3;  // variabel untuk jam 1 di jadwal 3
 int jam2_jd3;  // variabel untuk jam 2 di jadwal 3
 String text;
+
+// millis inisialitation 
 unsigned long current;
 unsigned long pre_time;
+unsigned long current1;
+unsigned long pre_time1;
+unsigned long current2;
+unsigned long pre_time2;
 //======================================================DONE=========================================================================
 
 //====================================================FUNCTION=======================================================================
 
+
+// =====================
+
+void pir_action(){
+  if (val == HIGH ) {
+    digitalWrite(FLASH_LED_PIN, HIGH);
+    if (PIRstate == LOW) {
+      // we have just turned on because movement is detected
+      Serial.println("Motion detected!");
+      timer.setInterval(500);
+      Serial.println("Sending photo to Telegram");
+      sendPhotoTelegram();
+      PIRstate = HIGH;
+    }
+  }
+
+ else {
+    digitalWrite(FLASH_LED_PIN, LOW);
+    if (PIRstate == HIGH) {
+      Serial.println("Motion ended!");
+      PIRstate = LOW;
+    }
+  }
+
+  
+}
 // ========Camera Setup===========
 void configInitCamera() {
   camera_config_t config;
@@ -119,12 +151,12 @@ void configInitCamera() {
 
   //init with high specs to pre-allocate larger buffers
   if (psramFound()) {
-    config.frame_size = FRAMESIZE_UXGA;
-    config.jpeg_quality = 10;  //0-63 lower number means higher quality
-    config.fb_count = 2;
+    config.frame_size = FRAMESIZE_VGA;
+    config.jpeg_quality = 20          ;  //0-63 lower number means higher quality
+    config.fb_count = 1;
   } else {
-    config.frame_size = FRAMESIZE_SVGA;
-    config.jpeg_quality = 12;  //0-63 lower number means higher quality
+    config.frame_size = FRAMESIZE_VGA;
+    config.jpeg_quality = 20;  //0-63 lower number means higher quality
     config.fb_count = 1;
   }
 
@@ -235,13 +267,25 @@ String sendPhotoTelegram() {
   String getAll = "";
   String getBody = "";
 
-  camera_fb_t * fb = NULL;
+// =======delay frame capture=========================
+//  camera_fb_t * fb = NULL;
+//  fb = esp_camera_fb_get();
+//  if (!fb) {
+//    Serial.println("Camera capture failed");
+//    delay(1000);
+//    ESP.restart();
+//    return "Camera capture failed";
+
+// ======= reduce delay frame capture=========================
+      camera_fb_t * fb = NULL;
   fb = esp_camera_fb_get();
-  if (!fb) {
+  esp_camera_fb_return(fb); // dispose the buffered image
+  fb = NULL; // reset to capture errors
+  fb = esp_camera_fb_get(); // get fresh image
+  if(!fb) {
     Serial.println("Camera capture failed");
-    delay(1000);
+    timer.setInterval(1000);
     ESP.restart();
-    return "Camera capture failed";
   }
 
   Serial.println("Connect to " + String(myDomain));
@@ -281,7 +325,7 @@ String sendPhotoTelegram() {
 
     esp_camera_fb_return(fb);
 
-    int waitTime = 10000;   // timeout 10 seconds
+    int waitTime = 200000;   // timeout 10 seconds
     long startTimer = millis();
     boolean state = false;
 
@@ -381,13 +425,7 @@ void loop() {
   if (current - pre_time >33){
     timeClient.update();
     val = digitalRead(PIRsensor);
-    Serial.println(timeClient.getFormattedTime());
-//    Serial.println(jam1_jd1);
-//    Serial.println(jam2_jd1);
-//    Serial.println(jam1_jd2);
-//    Serial.println(jam2_jd2);
-//    Serial.println(jam1_jd3);
-//    Serial.println(jam2_jd3);    
+    Serial.println(timeClient.getFormattedTime());   
     pre_time = current;
   }
   
@@ -409,25 +447,13 @@ void loop() {
 
     }
   }
-    int current1=millis();
-    int pre_time1;
+
+    current1=millis();
+   
   if ( current1 - pre_time1 >50){
-    
-  
-  if (val == HIGH ) {
-    digitalWrite(FLASH_LED_PIN, HIGH);
-    if (PIRstate == LOW) {
-      // we have just turned on because movement is detected
-      Serial.println("Motion detected!");
-      timer.setInterval(500);
-      Serial.println("Sending photo to Telegram");
-      sendPhotoTelegram();
-      PIRstate = HIGH;
-    }
-  }
 
 // ====================Running Jadwal 1=====================================
-  else if(Jd1){
+  if(Jd1){
     
     if (myBot.getNewMessage(msg)){
       arrData1[0] = "";
@@ -588,6 +614,9 @@ else if(Jd3){
     Serial.println("Flash state set to LOW");
   }
 
+  // ======================== JADWAL RUTIN PERBULAN MENG-CAPTURE KWH METER ==================================
+  // ======================= timeClient.getDay() --> ubah tanggal perbulan 
+  // ======================= timeClient.getHours() --> capture di jam yang ditentukan
   else if (timeClient.getDay()== 5 and timeClient.getHours()== 9 ) {
     Serial.println("Preparing photo");
     // SERVO WILL TURN TO 90 DEGREES 
@@ -604,16 +633,31 @@ else if(Jd3){
     Serial.println("Flash state set to LOW");
   }
   
-  
-  else {
-    digitalWrite(FLASH_LED_PIN, LOW);
-    if (PIRstate == HIGH) {
-      Serial.println("Motion ended!");
-      PIRstate = LOW;
-    }
-  }
 
   pre_time1 = current1;
   }
+
+  
+//============================= PIR ACTION by SCHEDULE=========================================
+  current2 = millis();
+    if (current2 - pre_time2 > 70){
+
+     if (jam1_jd1 <= timeClient.getHours() and timeClient.getHours() < jam2_jd1) {
+      
+    pir_action();
+    
+ }
+
+    else if (jam1_jd2 <= timeClient.getHours() and timeClient.getHours() < jam2_jd2){
+      pir_action();
+    }
+
+    else if (jam1_jd3 <= timeClient.getHours() and timeClient.getHours() < jam2_jd3){
+      pir_action();
+    }
+
+    
+  pre_time2 = current2;
+    }
 
 }
