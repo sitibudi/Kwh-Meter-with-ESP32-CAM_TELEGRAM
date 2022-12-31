@@ -8,8 +8,8 @@
 #include "soc/soc.h"
 #include "soc/rtc_cntl_reg.h"
 #include "esp_camera.h"
-#include "CTBot.h"
-#include <UniversalTelegramBot.h>
+#include "CTBot.h"  // jadwal
+#include <UniversalTelegramBot.h>  // sendphoto 
 #include <ArduinoJson.h>
 #include <ESP32Servo.h> 
 
@@ -23,25 +23,33 @@
 
 //==================================================INITIALIZATION=======================================================================
 // =======Initialize Wifi =========
-//const char* ssid = "Pelatihan_Elektro"; 
-//const char* password = "ukm12345*";
+const char* ssid = "Pelatihan_Elektro"; 
+const char* password = "elektro12345*";
 
-const char* ssid = "sitibudi_laptop"; 
-const char* password = "luncuran123";
+//const char* ssid = "sitibudi"; 
+//const char* password = "sitibudi";
 
 //const char* ssid = "Bro-Bor"; 
 //const char* password = "9434276267";
 
+// const char* ssid = "Tenda_2BE140"; 
+// const char* password = "33338888";
+
 // ========Initialize Telegram BOT==============
 
+//String BOTtoken = "5903341307:AAE49ynHNbtP3V7i7PMMNyOueXTlRJZbd1U";  
+String BOTtoken = "5922129588:AAHpBhi41VmB3RsYdwvT7FcZRasAl6-0UpQ";  
 
-String BOTtoken = "5664311941:AAFTyRdL17bsLJ9946V0OVJa4jz1hchR7eE";  
-String CHAT_ID = "925595481";
+String CHAT_ID1 = "925595481"; // budi 
+String CHAT_ID = "1428165038"; // tobi
+
 bool sendPhoto = false;
 bool Jd1 = false;
 bool Jd2 = false;
 bool Jd3 = false;
 bool status_jd =false;
+
+bool putarfoto = false;
 
 //Checks for new messages every 100 millisecond.
 int botRequestDelay = 100;
@@ -56,21 +64,25 @@ WiFiClientSecure clientTCP;
 UniversalTelegramBot bot(BOTtoken, clientTCP);
 
 CTBot myBot;
+//  CTbot msg object
+  TBMessage msg;
 
 //=========Initialize NTP=============
 WiFiUDP ntpUDP;
-NTPClient timeClient(ntpUDP,"pool.ntp.org", 25200);  // GMT(+7) * 3600 = gmtOffset_sec 
-const char* ntpServer = "pool.ntp.org";
+NTPClient timeClient(ntpUDP,"id.pool.ntp.org", 25200);  // GMT(+7) * 3600 = gmtOffset_sec 
+const char* ntpServer = "id.pool.ntp.org";
 SimpleTimer timer;
 
 // =======Initialize Servo============
-Servo myservo;
-int servoPin = 12;
+Servo myservo1;
+Servo myservo2;
+int servo1Pin = 14;
+int servo2Pin = 15;
 //int int index;
 // =======Initialize PIR Sensor============
 int PIRstate = LOW; // we start, assuming no motion detected
 int val = 0;
-const int PIRsensor = 13;
+const int PIRsensor = 2;
 // the time we give the sensor to calibrate (approx. 10-60 secs according to datatsheet)
 const int calibrationTime = 300; // 30 secs
 
@@ -88,7 +100,7 @@ int jam1_jd3;  // variabel untuk jam 1 di jadwal 3
 int jam2_jd3;  // variabel untuk jam 2 di jadwal 3
 String text;
 
-// millis inisialitation 
+// millis initialitation 
 unsigned long current;
 unsigned long pre_time;
 unsigned long current1;
@@ -151,12 +163,12 @@ void configInitCamera() {
 
   //init with high specs to pre-allocate larger buffers
   if (psramFound()) {
-    config.frame_size = FRAMESIZE_VGA;
-    config.jpeg_quality = 20          ;  //0-63 lower number means higher quality
+    config.frame_size = FRAMESIZE_SVGA;
+    config.jpeg_quality = 5          ;  //0-63 lower number means higher quality
     config.fb_count = 1;
   } else {
-    config.frame_size = FRAMESIZE_VGA;
-    config.jpeg_quality = 20;  //0-63 lower number means higher quality
+    config.frame_size = FRAMESIZE_SVGA;
+    config.jpeg_quality = 5;  //0-63 lower number means higher quality
     config.fb_count = 1;
   }
 
@@ -171,8 +183,9 @@ timer.setInterval(1000);
 
   // Drop down frame size for higher initial frame rate
   sensor_t * s = esp_camera_sensor_get();
-  s->set_framesize(s, FRAMESIZE_CIF);  // UXGA|SXGA|XGA|SVGA|VGA|CIF|QVGA|HQVGA|QQVGA
+  s->set_framesize(s, FRAMESIZE_SVGA);  // UXGA|SXGA|XGA|SVGA|VGA|CIF|QVGA|HQVGA|QQVGA
   s->set_vflip(s, 1);  // 0 = disable , 1 = enable vertical flip
+  s->set_hmirror(s, 1);
 }
 
 
@@ -198,30 +211,31 @@ void handleNewMessages(int numNewMessages) {
     String from_name = bot.messages[i].from_name;
   
     if (text == "/start") {
-      String welcome = "Welcome , "  + from_name + "\n";
-      welcome += "Use the following commands to interact with the ESP32-CAM \n";
-      welcome += "/PIR_stat: Menampilkan status Sensor PIR aktif sesuai jadwal \n";
-      welcome += "/Photo_Manual: Mengambil foto manual\n";
-      welcome += "/flash : toggles flash LED \n";
-      welcome += "/Schedule: menu mengatur jadwal \n";
+      String welcome = "Halo , "  + from_name + "\n";
+      welcome += "Silahkan menggunakan perintah berikut ini untuk berkomunikasi dengan ESP32-CAM \n";
+      welcome += "/pirstatus: Menampilkan status Sensor PIR aktif sesuai jadwal \n";
+      welcome += "/fotomanual: Mengambil foto manual\n";
+      welcome += "/fotomanualkwh: Mengambil foto manual KWH meter\n";
+      welcome += "/jadwalpir: Menu mengatur jadwal \n";
       
       bot.sendMessage(CHAT_ID, welcome, "");
+      // bot.sendMessage(CHAT_ID1, welcome, "");
     }
-    else if (text == "/flash") {
-      flashState = !flashState;
-      digitalWrite(FLASH_LED_PIN, flashState);
-      Serial.println("Change flash LED state");
-    }
-    else if (text == "/PIR_stat") {
+    else if (text == "/pirstatus") {
       status_jd = true;
     }
 
-    else if (text == "/Photo_Manual") {
+    else if (text == "/fotomanual") {
       sendPhoto = true;
       Serial.println("New photo request");
     }
 
-    else if (text == "/Schedule"){
+    else if (text == "/fotomanualkwh") {
+      putarfoto = true;
+      Serial.println("New photo request");
+    }
+
+    else if (text == "/jadwalpir"){
       String schedule = "Menu ini merupakan menu untuk mengatur jadwal aktifnya sensor PIR \n";
       schedule += "terdapat 3 Jadwal yang bisa diubah oleh anda \n";
       schedule+= "/Jadwal_1\n";
@@ -229,12 +243,13 @@ void handleNewMessages(int numNewMessages) {
       schedule+= "/Jadwal_3\n";
 
       bot.sendMessage(CHAT_ID, schedule, "");
+      bot.sendMessage(CHAT_ID1, schedule, "");
     }
      
   
   else if (text =="/Jadwal_1"){
       String schedule1 = "Jadwal 1:\n";
-      schedule1 += "masukkan selang waktu (jam) aktif nya sensor PIR \n";
+      schedule1 += "Masukkan selang waktu (jam) aktif nya sensor PIR \n";
       schedule1 += "Contoh format : jam 12 sampai jam 17\n";
       schedule1 += "ketik : 12*17";
        bot.sendMessage(CHAT_ID, schedule1, "");
@@ -243,7 +258,7 @@ void handleNewMessages(int numNewMessages) {
 
   else if (text =="/Jadwal_2"){
      String schedule2 = "Jadwal 2:\n";
-     schedule2 += "masukkan selang waktu (jam) aktif nya sensor PIR \n";
+     schedule2 += "Masukkan selang waktu (jam) aktif nya sensor PIR \n";
      schedule2 += "Contoh format : jam 12 sampai jam 17\n";
      schedule2 += "ketik : 12*17";
      bot.sendMessage(CHAT_ID, schedule2, "");
@@ -252,12 +267,22 @@ void handleNewMessages(int numNewMessages) {
 
   else if (text =="/Jadwal_3"){
      String schedule3 = "Jadwal 3:\n";
-     schedule3 += "masukkan selang waktu (jam) aktif nya sensor PIR \n";
+     schedule3 += "Masukkan selang waktu (jam) aktif nya sensor PIR \n";
      schedule3 += "Contoh format : jam 12 sampai jam 17\n";
      schedule3 += "ketik : 12*17";
      bot.sendMessage(CHAT_ID, schedule3, "");
      Jd3=true;
         }
+
+  else {
+     String com = "Command tidak tersedia.\n";
+     com += "Silahkan pilih dari Command berikut untuk berinteraksi dengan ESP32-CAM\n";
+      com += "/pirstatus: Menampilkan status Sensor PIR aktif sesuai jadwal \n";
+      com += "/fotomanual: Mengambil foto manual\n";
+      com += "/fotomanualkwh: Mengambil foto manual KWH meter\n";
+      com += "/jadwalpir: Menu mengatur jadwal \n";
+    bot.sendMessage(CHAT_ID, com,"");
+  }
   }
 }
 
@@ -372,8 +397,10 @@ void setup() {
   pinMode(FLASH_LED_PIN, OUTPUT);
   digitalWrite(FLASH_LED_PIN, flashState);
   // Set SERVO ATTACH AND DEFAULT POSITION
-  myservo.attach(servoPin);
-  myservo.write(0);
+  myservo1.attach(servo1Pin);
+  myservo2.attach(servo2Pin);
+ myservo1.write(160);
+ myservo2.write(89);
 
   // Set PIR sensor as input and LED as output
   pinMode(PIRsensor, INPUT);
@@ -408,6 +435,8 @@ void setup() {
   else
     Serial.println("\ntestConnection NOK");
   timeClient.begin();
+  myBot.sendMessage(msg.sender.id, "ESP Connected!!");
+   bot.sendMessage(CHAT_ID,"ESP Connected!!");
   
 }
 
@@ -418,9 +447,7 @@ void setup() {
 
 void loop() {
   // put your main code here, to run repeatedly:
-//  CTbot msg object
-  TBMessage msg;
-  
+ 
   current =millis();
   if (current - pre_time >33){
     timeClient.update();
@@ -475,9 +502,9 @@ void loop() {
       if (index == 1){
         jam1_jd1 = arrData1[0].toInt();
         jam2_jd1 = arrData1[1].toInt();
-        myBot.sendMessage(msg.sender.id, "format benar");
+        myBot.sendMessage(msg.sender.id, "Format Benar!");
          String schedule = "Menu ini merupakan menu untuk mengatur jadwal aktifnya sensor PIR \n";
-      schedule += "terdapat 3 Jadwal yang bisa diubah oleh anda \n";
+      schedule += "Terdapat 3 Jadwal yang bisa diubah oleh anda \n";
       schedule+= "/Jadwal_1\n";
       schedule+= "/Jadwal_2\n";
       schedule+= "/Jadwal_3\n";
@@ -598,38 +625,60 @@ else if(Jd3){
 
   
   else if (sendPhoto ) { //timeClient.getSeconds()== 9 
+     Serial.println("Preparing photo");
+    digitalWrite(FLASH_LED_PIN, HIGH);
+    Serial.println("Flash state set to HIGH");
+    sendPhotoTelegram();
+    sendPhoto = false;  
+    timer.setInterval(500);
+    digitalWrite(FLASH_LED_PIN, LOW);
+    Serial.println("Flash state set to LOW");
+  }
+
+  else if (putarfoto) { //timeClient.getSeconds()== 9 
     Serial.println("Preparing photo");
     // SERVO WILL TURN TO 90 DEGREES 
-    myservo.write(90);
+    myservo2.write(89);
+    myservo1.write(0);
+    delay(500);
     digitalWrite(FLASH_LED_PIN, HIGH);
     Serial.println("Flash state set to HIGH");
     
     //CALL FUNCTION TO SEND PHOTO TO TELEGRAM
     sendPhotoTelegram();
-    sendPhoto = false;  
+    putarfoto = false;  
     timer.setInterval(500);
     digitalWrite(FLASH_LED_PIN, LOW);
     // SERVO WILL TURN TO DEFAULT POSITION
-    myservo.write(0);
+    myservo1.write(180);
+    myservo2.write(95);
     Serial.println("Flash state set to LOW");
   }
 
   // ======================== JADWAL RUTIN PERBULAN MENG-CAPTURE KWH METER ==================================
   // ======================= timeClient.getDay() --> ubah tanggal perbulan 
   // ======================= timeClient.getHours() --> capture di jam yang ditentukan
-  else if (timeClient.getDay()== 5 and timeClient.getHours()== 9 ) {
+  // else if (timeClient.getDay()== 5 and timeClient.getHours()== 9 ) {
+  else if (timeClient.getHours()== 6 or timeClient.getHours()== 9 or 
+        timeClient.getHours()== 12 or timeClient.getHours()== 13 or 
+        timeClient.getHours()== 16 or timeClient.getHours()== 18 or
+        timeClient.getHours()== 20 or timeClient.getHours()== 23    ) {
     Serial.println("Preparing photo");
     // SERVO WILL TURN TO 90 DEGREES 
-    myservo.write(90);
+    myservo2.write(89);
+    myservo1.write(0);
+    delay(500);
     digitalWrite(FLASH_LED_PIN, HIGH);
     Serial.println("Flash state set to HIGH");
-    timer.setInterval(500);
+    
     //CALL FUNCTION TO SEND PHOTO TO TELEGRAM
     sendPhotoTelegram();
-    sendPhoto = false;
+    putarfoto = false;  
+    timer.setInterval(500);
     digitalWrite(FLASH_LED_PIN, LOW);
     // SERVO WILL TURN TO DEFAULT POSITION
-    myservo.write(0);
+    myservo1.write(180);
+    myservo2.write(95);
     Serial.println("Flash state set to LOW");
   }
   
