@@ -23,21 +23,12 @@
 
 //==================================================INITIALIZATION=======================================================================
 // =======Initialize Wifi =========
-const char* ssid = "Pelatihan_Elektro"; 
-const char* password = "elektro12345*";
-
-//const char* ssid = "sitibudi"; 
-//const char* password = "sitibudi";
-
-//const char* ssid = "Bro-Bor"; 
-//const char* password = "9434276267";
-
-// const char* ssid = "Tenda_2BE140"; 
-// const char* password = "33338888";
+const char* ssid = ""; 
+const char* password = "";
 
 // ========Initialize Telegram BOT==============
 
-//String BOTtoken = "5903341307:AAE49ynHNbtP3V7i7PMMNyOueXTlRJZbd1U";  
+// String BOTtoken = "5903341307:AAE49ynHNbtP3V7i7PMMNyOueXTlRJZbd1U";  // budi
 String BOTtoken = "5922129588:AAHpBhi41VmB3RsYdwvT7FcZRasAl6-0UpQ";  
 
 String CHAT_ID1 = "925595481"; // budi 
@@ -76,8 +67,8 @@ SimpleTimer timer;
 // =======Initialize Servo============
 Servo myservo1;
 Servo myservo2;
-int servo1Pin = 14;
-int servo2Pin = 15;
+int servo1Pin = 12;
+int servo2Pin = 13;
 //int int index;
 // =======Initialize PIR Sensor============
 int PIRstate = LOW; // we start, assuming no motion detected
@@ -111,7 +102,7 @@ unsigned long pre_time2;
 
 //====================================================FUNCTION=======================================================================
 
-
+void startCameraServer();
 // =====================
 
 void pir_action(){
@@ -399,8 +390,8 @@ void setup() {
   // Set SERVO ATTACH AND DEFAULT POSITION
   myservo1.attach(servo1Pin);
   myservo2.attach(servo2Pin);
- myservo1.write(160);
- myservo2.write(89);
+ myservo1.write(180);
+ myservo2.write(82);
 
   // Set PIR sensor as input and LED as output
   pinMode(PIRsensor, INPUT);
@@ -421,6 +412,7 @@ void setup() {
     Serial.print(".");
     delay(500);
   }
+  startCameraServer();
   Serial.println();
   Serial.print("ESP32-CAM IP Address: ");
   Serial.println(WiFi.localIP());
@@ -636,14 +628,13 @@ else if(Jd3){
   }
 
   else if (putarfoto) { //timeClient.getSeconds()== 9 
-    Serial.println("Preparing photo");
+    // Serial.println("Preparing photo");
     // SERVO WILL TURN TO 90 DEGREES 
     myservo2.write(89);
     myservo1.write(0);
-    delay(500);
     digitalWrite(FLASH_LED_PIN, HIGH);
     Serial.println("Flash state set to HIGH");
-    
+    delay(1500);
     //CALL FUNCTION TO SEND PHOTO TO TELEGRAM
     sendPhotoTelegram();
     putarfoto = false;  
@@ -651,7 +642,7 @@ else if(Jd3){
     digitalWrite(FLASH_LED_PIN, LOW);
     // SERVO WILL TURN TO DEFAULT POSITION
     myservo1.write(180);
-    myservo2.write(95);
+    myservo2.write(82);
     Serial.println("Flash state set to LOW");
   }
 
@@ -659,18 +650,21 @@ else if(Jd3){
   // ======================= timeClient.getDay() --> ubah tanggal perbulan 
   // ======================= timeClient.getHours() --> capture di jam yang ditentukan
   // else if (timeClient.getDay()== 5 and timeClient.getHours()== 9 ) {
-  else if (timeClient.getHours()== 6 or timeClient.getHours()== 9 or 
-        timeClient.getHours()== 12 or timeClient.getHours()== 13 or 
-        timeClient.getHours()== 16 or timeClient.getHours()== 18 or
-        timeClient.getHours()== 20 or timeClient.getHours()== 23    ) {
+  else if ((timeClient.getHours()== 6 and timeClient.getMinutes() <=1 and timeClient.getSeconds() <=10) or (timeClient.getHours()== 9 and timeClient.getMinutes() <=1 and timeClient.getSeconds() <=10) or
+             (timeClient.getHours()== 12 and timeClient.getMinutes() <=1 and timeClient.getSeconds() <=10) or (timeClient.getHours()== 15 and timeClient.getMinutes() <=1 and timeClient.getSeconds() <=10) or
+             (timeClient.getHours()== 18 and timeClient.getMinutes() <=1 and timeClient.getSeconds() <=10) or (timeClient.getHours()== 21 and timeClient.getMinutes() <=1 and timeClient.getSeconds() <=10) or 
+             (timeClient.getHours()== 0 and timeClient.getMinutes() <=1 and timeClient.getSeconds() <=10)  ) {
     Serial.println("Preparing photo");
     // SERVO WILL TURN TO 90 DEGREES 
     myservo2.write(89);
     myservo1.write(0);
-    delay(500);
+    
     digitalWrite(FLASH_LED_PIN, HIGH);
     Serial.println("Flash state set to HIGH");
-    
+    delay(1500);
+    String foto = "Ini adalah hasil pengambilan gambar KWH Meter\n";
+      foto+= "sesuai Jadwal Rutin yang berlaku (Setiap 3 jam sekali)";
+    bot.sendMessage(CHAT_ID, foto,"");
     //CALL FUNCTION TO SEND PHOTO TO TELEGRAM
     sendPhotoTelegram();
     putarfoto = false;  
@@ -678,7 +672,7 @@ else if(Jd3){
     digitalWrite(FLASH_LED_PIN, LOW);
     // SERVO WILL TURN TO DEFAULT POSITION
     myservo1.write(180);
-    myservo2.write(95);
+    myservo2.write(82);
     Serial.println("Flash state set to LOW");
   }
   
