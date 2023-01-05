@@ -1,12 +1,12 @@
 //=====================================================LIBRARY=======================================================================
 #include <Arduino.h>
 #include <NTPClient.h>
-#include "SimpleTimer.h"
+#include <SimpleTimer.h>
 #include <WiFi.h>
 #include <WiFiUdp.h>
 #include <WiFiClientSecure.h>
-#include "soc/soc.h"
-#include "soc/rtc_cntl_reg.h"
+//#include "soc/soc.h"
+//#include "soc/rtc_cntl_reg.h"
 #include "esp_camera.h"
 #include "CTBot.h"  // jadwal
 #include <UniversalTelegramBot.h>  // sendphoto 
@@ -28,19 +28,21 @@ const char* password = "";
 
 // ========Initialize Telegram BOT==============
 
-// String BOTtoken = "5903341307:AAE49ynHNbtP3V7i7PMMNyOueXTlRJZbd1U";  // budi
-String BOTtoken = "5922129588:AAHpBhi41VmB3RsYdwvT7FcZRasAl6-0UpQ";  
+String BOTtoken = "5903341307:AAE49ynHNbtP3V7i7PMMNyOueXTlRJZbd1U";  // budi
+// String BOTtoken = "5922129588:AAHpBhi41VmB3RsYdwvT7FcZRasAl6-0UpQ";  
 
-String CHAT_ID1 = "925595481"; // budi 
-String CHAT_ID = "1428165038"; // tobi
+String CHAT_ID = "925595481"; // budi 
+String CHAT_ID1 = "1428165038"; // tobi
 
 bool sendPhoto = false;
+bool status_jd =false;
+bool putarfoto = false;
+
+// schedule boolean
 bool Jd1 = false;
 bool Jd2 = false;
 bool Jd3 = false;
-bool status_jd =false;
 
-bool putarfoto = false;
 
 //Checks for new messages every 100 millisecond.
 int botRequestDelay = 100;
@@ -51,12 +53,15 @@ String arrData1[7] = {};
 String arrData2[7] = {};
 String arrData3[7] = {};
 
+String local_ip;
+
 WiFiClientSecure clientTCP;
 UniversalTelegramBot bot(BOTtoken, clientTCP);
 
-CTBot myBot;
 //  CTbot msg object
-  TBMessage msg;
+CTBot myBot;
+// Universal msg object
+TBMessage msg;
 
 //=========Initialize NTP=============
 WiFiUDP ntpUDP;
@@ -69,7 +74,7 @@ Servo myservo1;
 Servo myservo2;
 int servo1Pin = 12;
 int servo2Pin = 13;
-//int int index;
+
 // =======Initialize PIR Sensor============
 int PIRstate = LOW; // we start, assuming no motion detected
 int val = 0;
@@ -89,6 +94,7 @@ int jam1_jd2;  // variabel untuk jam 1 di jadwal 2
 int jam2_jd2;  // variabel untuk jam 2 di jadwal 2
 int jam1_jd3;  // variabel untuk jam 1 di jadwal 3
 int jam2_jd3;  // variabel untuk jam 2 di jadwal 3
+
 String text;
 
 // millis initialitation 
@@ -98,31 +104,133 @@ unsigned long current1;
 unsigned long pre_time1;
 unsigned long current2;
 unsigned long pre_time2;
+
+unsigned long runcurrent;
+unsigned long runpre_time;
+
+bool ctbool = false;
+
 //======================================================DONE=========================================================================
 
+void ctmsg (){
+  if(myBot.getNewMessage(msg)){
+    ctbool = true;
+    Serial.print("msg:"+msg.text);
+    String textCT = msg.text;
+    if (textCT == "/start"){
+        String welcome = "Halo \n";
+        welcome += "Silahkan menggunakan perintah berikut ini untuk berkomunikasi dengan ESP32-CAM \n";
+        // welcome += "/livestream: Melihat kondisi streaming kamera saat ini \n";
+        welcome += "/pirstatus: Menampilkan status Sensor PIR aktif sesuai jadwal \n";
+        welcome += "/fotomanual: Mengambil foto manual\n";
+        welcome += "/fotomanualkwh: Mengambil foto manual KWH meter\n";
+        welcome += "/jadwalpir: Menu mengatur jadwal \n";
+        myBot.sendMessage(msg.sender.id, welcome);
+    }
+
+    else if (textCT == "/fotomanual") {
+        sendPhoto = true;
+        Serial.println("New photo request");
+      }
+    
+    else if (textCT == "/livestream") {
+        String stream = "Untuk melakukan Livestreaming ESP32-CAM silahkan mengunjungi link berikut: \n" ;
+        stream += local_ip;
+        myBot.sendMessage(msg.sender.id, stream);
+      }
+
+      
+      else if (textCT == "/pirstatus") {
+        status_jd = true;
+      }
+
+      else if (textCT == "/fotomanual") {
+        sendPhoto = true;
+        Serial.println("New photo request");
+      }
+
+      else if (textCT == "/fotomanualkwh") {
+        putarfoto = true;
+        Serial.println("New photo request");
+      }
+
+      else if (textCT == "/jadwalpir"){
+        String schedule = "Menu ini merupakan menu untuk mengatur jadwal aktifnya sensor PIR \n";
+        schedule += "terdapat 3 Jadwal yang bisa diubah oleh anda \n";
+        schedule+= "/Jadwal_1\n";
+        schedule+= "/Jadwal_2\n";
+        schedule+= "/Jadwal_3\n";
+
+        myBot.sendMessage(msg.sender.id, schedule);
+      }
+      
+    
+    else if (textCT =="/Jadwal_1"){
+        String schedule1 = "Jadwal 1:\n";
+        schedule1 += "Masukkan selang waktu (jam) aktif nya sensor PIR \n";
+        schedule1 += "Contoh format : jam 12 sampai jam 17\n";
+        schedule1 += "ketik : 12*17";
+        myBot.sendMessage(msg.sender.id, schedule1);
+        Jd1=true;
+      }
+
+    else if (textCT =="/Jadwal_2"){
+      String schedule2 = "Jadwal 2:\n";
+      schedule2 += "Masukkan selang waktu (jam) aktif nya sensor PIR \n";
+      schedule2 += "Contoh format : jam 12 sampai jam 17\n";
+      schedule2 += "ketik : 12*17";
+      myBot.sendMessage(msg.sender.id, schedule2);
+      Jd2=true;
+      }
+
+    else if (textCT =="/Jadwal_3"){
+      String schedule3 = "Jadwal 3:\n";
+      schedule3 += "Masukkan selang waktu (jam) aktif nya sensor PIR \n";
+      schedule3 += "Contoh format : jam 12 sampai jam 17\n";
+      schedule3 += "ketik : 12*17";
+      myBot.sendMessage(msg.sender.id, schedule3);
+      Jd3=true;
+      }
+
+    else {
+      String com = "Command tidak tersedia.\n";
+      com += "Silahkan pilih dari Command berikut untuk berinteraksi dengan ESP32-CAM\n";
+      com += "/pirstatus: Menampilkan status Sensor PIR aktif sesuai jadwal \n";
+      com += "/fotomanual: Mengambil foto manual\n";
+      com += "/fotomanualkwh: Mengambil foto manual KWH meter\n";
+      com += "/jadwalpir: Menu mengatur jadwal \n";
+      myBot.sendMessage(msg.sender.id, com);
+    }
+    
+
+  }
+}
 //====================================================FUNCTION=======================================================================
 
-void startCameraServer();
-// =====================
+// Camera streaming function
+// void startCameraServer();
+
 
 void pir_action(){
   if (val == HIGH ) {
-    digitalWrite(FLASH_LED_PIN, HIGH);
-    if (PIRstate == LOW) {
-      // we have just turned on because movement is detected
-      Serial.println("Motion detected!");
-      timer.setInterval(500);
-      Serial.println("Sending photo to Telegram");
-      sendPhotoTelegram();
-      PIRstate = HIGH;
-    }
+      digitalWrite(FLASH_LED_PIN, HIGH);
+      if (PIRstate == LOW) {
+          // we have just turned on because movement is detected
+          Serial.println("Motion detected!");
+          // timer.setInterval(500);
+          Serial.println("Sending photo to Telegram");
+          sendPhotoTelegram();
+          PIRstate = HIGH;
+
+      }
   }
 
  else {
     digitalWrite(FLASH_LED_PIN, LOW);
     if (PIRstate == HIGH) {
-      Serial.println("Motion ended!");
-      PIRstate = LOW;
+        Serial.println("Motion ended!");
+        PIRstate = LOW;
+
     }
   }
 
@@ -201,84 +309,92 @@ void handleNewMessages(int numNewMessages) {
 
     String from_name = bot.messages[i].from_name;
   
-    if (text == "/start") {
-      String welcome = "Halo , "  + from_name + "\n";
-      welcome += "Silahkan menggunakan perintah berikut ini untuk berkomunikasi dengan ESP32-CAM \n";
-      welcome += "/pirstatus: Menampilkan status Sensor PIR aktif sesuai jadwal \n";
-      welcome += "/fotomanual: Mengambil foto manual\n";
-      welcome += "/fotomanualkwh: Mengambil foto manual KWH meter\n";
-      welcome += "/jadwalpir: Menu mengatur jadwal \n";
+      if (text == "/start") {
+        String welcome = "Halo , "  + from_name + "\n";
+        welcome += "Silahkan menggunakan perintah berikut ini untuk berkomunikasi dengan ESP32-CAM \n";
+        // welcome += "/livestream: Melihat kondisi streaming kamera saat ini \n";
+        welcome += "/pirstatus: Menampilkan status Sensor PIR aktif sesuai jadwal \n";
+        welcome += "/fotomanual: Mengambil foto manual\n";
+        welcome += "/fotomanualkwh: Mengambil foto manual KWH meter\n";
+        welcome += "/jadwalpir: Menu mengatur jadwal \n";
+        
+        bot.sendMessage(CHAT_ID, welcome, "");
+      }
+
+      else if (text == "/livestream") {
+        String stream = "Untuk melakukan Livestreaming ESP32-CAM silahkan mengunjungi link berikut: \n" ;
+        stream += local_ip;
+        bot.sendMessage(CHAT_ID, stream, "");
+      }
+
       
-      bot.sendMessage(CHAT_ID, welcome, "");
-      // bot.sendMessage(CHAT_ID1, welcome, "");
-    }
-    else if (text == "/pirstatus") {
-      status_jd = true;
-    }
+      else if (text == "/pirstatus") {
+        status_jd = true;
+      }
 
-    else if (text == "/fotomanual") {
-      sendPhoto = true;
-      Serial.println("New photo request");
-    }
+      else if (text == "/fotomanual") {
+        sendPhoto = true;
+        Serial.println("New photo request");
+      }
 
-    else if (text == "/fotomanualkwh") {
-      putarfoto = true;
-      Serial.println("New photo request");
-    }
+      else if (text == "/fotomanualkwh") {
+        putarfoto = true;
+        Serial.println("New photo request");
+      }
 
-    else if (text == "/jadwalpir"){
-      String schedule = "Menu ini merupakan menu untuk mengatur jadwal aktifnya sensor PIR \n";
-      schedule += "terdapat 3 Jadwal yang bisa diubah oleh anda \n";
-      schedule+= "/Jadwal_1\n";
-      schedule+= "/Jadwal_2\n";
-      schedule+= "/Jadwal_3\n";
+      else if (text == "/jadwalpir"){
+        String schedule = "Menu ini merupakan menu untuk mengatur jadwal aktifnya sensor PIR \n";
+        schedule += "terdapat 3 Jadwal yang bisa diubah oleh anda \n";
+        schedule+= "/Jadwal_1\n";
+        schedule+= "/Jadwal_2\n";
+        schedule+= "/Jadwal_3\n";
 
-      bot.sendMessage(CHAT_ID, schedule, "");
-      bot.sendMessage(CHAT_ID1, schedule, "");
-    }
-     
-  
-  else if (text =="/Jadwal_1"){
-      String schedule1 = "Jadwal 1:\n";
-      schedule1 += "Masukkan selang waktu (jam) aktif nya sensor PIR \n";
-      schedule1 += "Contoh format : jam 12 sampai jam 17\n";
-      schedule1 += "ketik : 12*17";
-       bot.sendMessage(CHAT_ID, schedule1, "");
-      Jd1=true;
-        }
+        bot.sendMessage(CHAT_ID, schedule, "");
+      }
+      
+    
+    else if (text =="/Jadwal_1"){
+        String schedule1 = "Jadwal 1:\n";
+        schedule1 += "Masukkan selang waktu (jam) aktif nya sensor PIR \n";
+        schedule1 += "Contoh format : jam 12 sampai jam 17\n";
+        schedule1 += "ketik : 12*17";
+        bot.sendMessage(CHAT_ID, schedule1, "");
+        Jd1=true;
+      }
 
-  else if (text =="/Jadwal_2"){
-     String schedule2 = "Jadwal 2:\n";
-     schedule2 += "Masukkan selang waktu (jam) aktif nya sensor PIR \n";
-     schedule2 += "Contoh format : jam 12 sampai jam 17\n";
-     schedule2 += "ketik : 12*17";
-     bot.sendMessage(CHAT_ID, schedule2, "");
-     Jd2=true;
-        }
+    else if (text =="/Jadwal_2"){
+      String schedule2 = "Jadwal 2:\n";
+      schedule2 += "Masukkan selang waktu (jam) aktif nya sensor PIR \n";
+      schedule2 += "Contoh format : jam 12 sampai jam 17\n";
+      schedule2 += "ketik : 12*17";
+      bot.sendMessage(CHAT_ID, schedule2, "");
+      Jd2=true;
+      }
 
-  else if (text =="/Jadwal_3"){
-     String schedule3 = "Jadwal 3:\n";
-     schedule3 += "Masukkan selang waktu (jam) aktif nya sensor PIR \n";
-     schedule3 += "Contoh format : jam 12 sampai jam 17\n";
-     schedule3 += "ketik : 12*17";
-     bot.sendMessage(CHAT_ID, schedule3, "");
-     Jd3=true;
-        }
+    else if (text =="/Jadwal_3"){
+      String schedule3 = "Jadwal 3:\n";
+      schedule3 += "Masukkan selang waktu (jam) aktif nya sensor PIR \n";
+      schedule3 += "Contoh format : jam 12 sampai jam 17\n";
+      schedule3 += "ketik : 12*17";
+      bot.sendMessage(CHAT_ID, schedule3, "");
+      Jd3=true;
+      }
 
-  else {
-     String com = "Command tidak tersedia.\n";
-     com += "Silahkan pilih dari Command berikut untuk berinteraksi dengan ESP32-CAM\n";
+    else {
+      String com = "Command tidak tersedia.\n";
+      com += "Silahkan pilih dari Command berikut untuk berinteraksi dengan ESP32-CAM\n";
       com += "/pirstatus: Menampilkan status Sensor PIR aktif sesuai jadwal \n";
       com += "/fotomanual: Mengambil foto manual\n";
       com += "/fotomanualkwh: Mengambil foto manual KWH meter\n";
       com += "/jadwalpir: Menu mengatur jadwal \n";
-    bot.sendMessage(CHAT_ID, com,"");
-  }
+      bot.sendMessage(CHAT_ID, com,"");
+    }
+
   }
 }
 
 // ============== SEND PHOTO FUNCTION===============
-String sendPhotoTelegram() {
+  String sendPhotoTelegram() {
   const char* myDomain = "api.telegram.org";
   String getAll = "";
   String getBody = "";
@@ -377,21 +493,22 @@ String sendPhotoTelegram() {
 // ================================================================
 // ===                      INITIAL SETUP                       ===
 // ================================================================
+
 void setup() {
   // put your setup code here, to run once:
-   WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
+//   WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
   Serial.begin(115200);
    // Config and init the camera
   configInitCamera();
   
   // Set LED Flash as output
   pinMode(FLASH_LED_PIN, OUTPUT);
-  digitalWrite(FLASH_LED_PIN, flashState);
+  // digitalWrite(FLASH_LED_PIN, flashState);
   // Set SERVO ATTACH AND DEFAULT POSITION
   myservo1.attach(servo1Pin);
   myservo2.attach(servo2Pin);
- myservo1.write(180);
- myservo2.write(82);
+  myservo1.write(180);
+  myservo2.write(82);
 
   // Set PIR sensor as input and LED as output
   pinMode(PIRsensor, INPUT);
@@ -412,10 +529,11 @@ void setup() {
     Serial.print(".");
     delay(500);
   }
-  startCameraServer();
+  // startCameraServer();
   Serial.println();
   Serial.print("ESP32-CAM IP Address: ");
   Serial.println(WiFi.localIP());
+
   myBot.wifiConnect(ssid, password);
 
   // set the telegram bot token
@@ -427,8 +545,12 @@ void setup() {
   else
     Serial.println("\ntestConnection NOK");
   timeClient.begin();
-  myBot.sendMessage(msg.sender.id, "ESP Connected!!");
+  //WiFi.localIP convert to string
+  local_ip = WiFi.localIP().toString().c_str();
+  
    bot.sendMessage(CHAT_ID,"ESP Connected!!");
+
+  timer.setInterval(timeClient.update());
   
 }
 
@@ -439,36 +561,41 @@ void setup() {
 
 void loop() {
   // put your main code here, to run repeatedly:
- 
+//  ====================== MILLIS ============================================
   current =millis();
   if (current - pre_time >33){
-    timeClient.update();
+//    timeClient.update();
     val = digitalRead(PIRsensor);
     Serial.println(timeClient.getFormattedTime());   
     pre_time = current;
   }
   
-
+//  ====================== MILLIS MSG ============================================
+  runcurrent = millis();
 // get new Messages from Telegram
-  if (millis() > lastTimeBotRan + botRequestDelay ){//and Jd1 == false and Jd2 == false and Jd3 == false)  {
-    if (Jd1 == false and Jd2 == false and Jd3 == false){
-    int numNewMessages = bot.getUpdates(bot.last_message_received + 1);
+  if (runcurrent> lastTimeBotRan + botRequestDelay ){ 
+    // if (Jd1 == false and Jd2 == false and Jd3 == false and ctbool == false){ //
+    // int numNewMessages = bot.getUpdates(bot.last_message_received + 1); //
 //    Serial.print("bot");
 //    Serial.println(bot.last_message_received);
-    while (numNewMessages) {
-      Serial.print("num:");
-      Serial.println(numNewMessages);
-      Serial.println("got response");
-      handleNewMessages(numNewMessages);
-      numNewMessages = bot.getUpdates(bot.last_message_received + 1);
-    }
-    lastTimeBotRan = millis();
+    // while (numNewMessages) { // 
+//      Serial.print("num:");
+//      Serial.println(numNewMessages);
+//      Serial.println("got response");
+    //   handleNewMessages(numNewMessages); //
+    //   numNewMessages = bot.getUpdates(bot.last_message_received + 1);//
+    // } //
+    
 
-    }
+    // } //
+    
+      ctmsg();
+    
+    lastTimeBotRan = runcurrent;
   }
 
-    current1=millis();
-   
+//  ====================== MILLIS 1 ============================================
+  current1=millis(); 
   if ( current1 - pre_time1 >50){
 
 // ====================Running Jadwal 1=====================================
@@ -491,15 +618,16 @@ void loop() {
         }
   
       }
+
       if (index == 1){
         jam1_jd1 = arrData1[0].toInt();
         jam2_jd1 = arrData1[1].toInt();
         myBot.sendMessage(msg.sender.id, "Format Benar!");
-         String schedule = "Menu ini merupakan menu untuk mengatur jadwal aktifnya sensor PIR \n";
-      schedule += "Terdapat 3 Jadwal yang bisa diubah oleh anda \n";
-      schedule+= "/Jadwal_1\n";
-      schedule+= "/Jadwal_2\n";
-      schedule+= "/Jadwal_3\n";
+        String schedule = "Menu ini merupakan menu untuk mengatur jadwal aktifnya sensor PIR \n";
+        schedule += "Terdapat 3 Jadwal yang bisa diubah oleh anda \n";
+        schedule+= "/Jadwal_1\n";
+        schedule+= "/Jadwal_2\n";
+        schedule+= "/Jadwal_3\n";
         myBot.sendMessage(msg.sender.id, schedule, "");
         Jd1=false;
       }
@@ -514,12 +642,12 @@ void loop() {
 
  // ====================Running Jadwal 2=====================================
 
- else if(Jd2){
+  else if(Jd2){
     
     if (myBot.getNewMessage(msg)){
       arrData2[0] = "";
       arrData2[1] = "";
-      Serial.print("msg:"+msg.text);
+      Serial.println("msg:"+msg.text);
       String textCT = msg.text;
       int index = 0;
       for ( int i = 0; i < textCT.length(); i++){
@@ -528,7 +656,6 @@ void loop() {
           arrData2[index] += textCT[i];
         }
         else {
-
         index= index + 1;
         }
   
@@ -539,12 +666,12 @@ void loop() {
         jam2_jd2 = arrData2[1].toInt();
         myBot.sendMessage(msg.sender.id, "format benar");
         String schedule = "Menu ini merupakan menu untuk mengatur jadwal aktifnya sensor PIR \n";
-      schedule += "terdapat 3 Jadwal yang bisa diubah oleh anda \n";
-      schedule+= "/Jadwal_1\n";
-      schedule+= "/Jadwal_2\n";
-      schedule+= "/Jadwal_3\n";
+        schedule += "terdapat 3 Jadwal yang bisa diubah oleh anda \n";
+        schedule+= "/Jadwal_1\n";
+        schedule+= "/Jadwal_2\n";
+        schedule+= "/Jadwal_3\n";
         myBot.sendMessage(msg.sender.id, schedule, "");
-      Jd2=false;
+        Jd2=false;
       }
       
       else {
@@ -556,12 +683,12 @@ void loop() {
  }
 //
 // ====================Running Jadwal 3=====================================
-else if(Jd3){
+  else if(Jd3){
     
     if (myBot.getNewMessage(msg)){
       arrData3[0] = "";
       arrData3[1] = "";
-      Serial.print("msg:"+msg.text);
+      Serial.println("msg:"+msg.text);
       String textCT = msg.text;
       int index = 0;
       for ( int i = 0; i < textCT.length(); i++){
@@ -580,7 +707,7 @@ else if(Jd3){
         jam1_jd3 = arrData3[0].toInt();
         jam2_jd3 = arrData3[1].toInt();
         myBot.sendMessage(msg.sender.id, "format benar");
-      Jd3=false;
+        Jd3=false;
       }
       
       else {
@@ -610,65 +737,59 @@ else if(Jd3){
       status+= arrData3[1];
         bot.sendMessage(CHAT_ID, status, "");
       status_jd=false;
-
-    
   }
 
 
   
-  else if (sendPhoto ) { //timeClient.getSeconds()== 9 
-     Serial.println("Preparing photo");
+  else if (sendPhoto) { //timeClient.getSeconds()== 9 
+    Serial.println("Preparing photo");
     digitalWrite(FLASH_LED_PIN, HIGH);
     Serial.println("Flash state set to HIGH");
     sendPhotoTelegram();
     sendPhoto = false;  
-    timer.setInterval(500);
     digitalWrite(FLASH_LED_PIN, LOW);
     Serial.println("Flash state set to LOW");
   }
 
-  else if (putarfoto) { //timeClient.getSeconds()== 9 
-    // Serial.println("Preparing photo");
+  else if (putarfoto) { 
     // SERVO WILL TURN TO 90 DEGREES 
-    myservo2.write(89);
+    myservo2.write(95);
     myservo1.write(0);
+    delay(1500);
     digitalWrite(FLASH_LED_PIN, HIGH);
     Serial.println("Flash state set to HIGH");
-    delay(1500);
     //CALL FUNCTION TO SEND PHOTO TO TELEGRAM
     sendPhotoTelegram();
     putarfoto = false;  
-    timer.setInterval(500);
     digitalWrite(FLASH_LED_PIN, LOW);
     // SERVO WILL TURN TO DEFAULT POSITION
     myservo1.write(180);
     myservo2.write(82);
     Serial.println("Flash state set to LOW");
+    
   }
 
   // ======================== JADWAL RUTIN PERBULAN MENG-CAPTURE KWH METER ==================================
   // ======================= timeClient.getDay() --> ubah tanggal perbulan 
   // ======================= timeClient.getHours() --> capture di jam yang ditentukan
   // else if (timeClient.getDay()== 5 and timeClient.getHours()== 9 ) {
-  else if ((timeClient.getHours()== 6 and timeClient.getMinutes() <=1 and timeClient.getSeconds() <=10) or (timeClient.getHours()== 9 and timeClient.getMinutes() <=1 and timeClient.getSeconds() <=10) or
-             (timeClient.getHours()== 12 and timeClient.getMinutes() <=1 and timeClient.getSeconds() <=10) or (timeClient.getHours()== 15 and timeClient.getMinutes() <=1 and timeClient.getSeconds() <=10) or
-             (timeClient.getHours()== 18 and timeClient.getMinutes() <=1 and timeClient.getSeconds() <=10) or (timeClient.getHours()== 21 and timeClient.getMinutes() <=1 and timeClient.getSeconds() <=10) or 
-             (timeClient.getHours()== 0 and timeClient.getMinutes() <=1 and timeClient.getSeconds() <=10)  ) {
-    Serial.println("Preparing photo");
+  else if ( (timeClient.getHours()== 6 and timeClient.getMinutes() <=1 and timeClient.getSeconds() <=5) or (timeClient.getHours()== 9 and timeClient.getMinutes() <=1 and timeClient.getSeconds() <=5) or
+            (timeClient.getHours()== 12 and timeClient.getMinutes() <=1 and timeClient.getSeconds() <=5) or (timeClient.getHours()== 15 and timeClient.getMinutes() <=1 and timeClient.getSeconds() <=5) or
+            (timeClient.getHours()== 18 and timeClient.getMinutes() <=1 and timeClient.getSeconds() <=5) or (timeClient.getHours()== 21 and timeClient.getMinutes() <=1 and timeClient.getSeconds() <=5) or 
+            (timeClient.getHours()== 0 and timeClient.getMinutes() <=1 and timeClient.getSeconds() <=5)  ) {
+
     // SERVO WILL TURN TO 90 DEGREES 
-    myservo2.write(89);
+    myservo2.write(95);
     myservo1.write(0);
-    
+    delay(1500);
     digitalWrite(FLASH_LED_PIN, HIGH);
     Serial.println("Flash state set to HIGH");
-    delay(1500);
     String foto = "Ini adalah hasil pengambilan gambar KWH Meter\n";
-      foto+= "sesuai Jadwal Rutin yang berlaku (Setiap 3 jam sekali)";
+          foto+= "sesuai Jadwal Rutin yang berlaku (Setiap 3 jam sekali)";
     bot.sendMessage(CHAT_ID, foto,"");
     //CALL FUNCTION TO SEND PHOTO TO TELEGRAM
     sendPhotoTelegram();
     putarfoto = false;  
-    timer.setInterval(500);
     digitalWrite(FLASH_LED_PIN, LOW);
     // SERVO WILL TURN TO DEFAULT POSITION
     myservo1.write(180);
@@ -680,7 +801,7 @@ else if(Jd3){
   pre_time1 = current1;
   }
 
-  
+//  ====================== MILLIS 2 ============================================
 //============================= PIR ACTION by SCHEDULE=========================================
   current2 = millis();
     if (current2 - pre_time2 > 70){
